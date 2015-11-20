@@ -1,0 +1,167 @@
+#!/usr/bin/env python
+
+# This file is part of Invenio.
+# Copyright (C) 2015 CERN.
+#
+# Invenio is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; either version 2 of the
+# License, or (at your option) any later version.
+#
+# Invenio is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Invenio; if not, write to the Free Software Foundation, Inc.,
+# 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
+
+"""Command line interface for the CDS people collection. Map all CERN LDAP
+records to MARC 21 authority records, write to XML files and upload to CDS.
+
+See bibsched tasklet bst_bibauthority_updater for updating the collection.
+
+Usage:
+$python bibauthority_people -h
+"""
+
+import argparse
+import sys
+from glob import glob
+from invenio.bibauthority_people_config import (
+    CFG_BIBAUTHORITY_LDAP_ATTRLIST, CFG_BIBAUTHORITY_LDAP_SEARCHFILTER)
+from invenio.bibauthority_people_mapper import Mapper, MapperError
+from invenio.bibauthority_people_utils import (
+    bibupload, export_json, json_to_list, UtilsError)
+from invenio.ldap_cern import get_users_records_data, LDAPError
+from os.path import isdir, join
+
+
+def get_dict_from_json(parser, file):
+    """Return dictionary from JSON file."""
+    try:
+        tmp = json_to_list(file)
+        if tmp:
+            return tmp[0]
+    except UtilsError as e:
+        parser.error(e)
+
+
+def get_records(ldap_searchfilter=CFG_BIBAUTHORITY_LDAP_SEARCHFILTER,
+                ldap_attrlist=CFG_BIBAUTHORITY_LDAP_ATTRLIST):
+    """Return user records from LDAP."""
+    records = []
+    try:
+        records = get_users_records_data(ldap_searchfilter, ldap_attrlist)
+    except LDAPError as e:
+        print(e)
+    return records
+
+usage = ("bibauthority_people.py [-h] [[-r RECORDSIZE] [-x FILE [-l FILE] "
+         "[-j FILE]]] [-i FILE [FILE ...]] [-c]")
+
+parser = argparse.ArgumentParser(
+    description="Command line interface for the CDS people collection. Map "
+                "all CERN LDAP records to MARC 21 authority records, write "
+                "to XML files and upload to CDS.",
+    usage=usage)
+
+group1 = parser.add_argument_group("Export")
+group2 = parser.add_argument_group("Insertion to CDS")
+group3 = parser.add_argument_group("Information")
+
+group1.add_argument(
+    "-r",
+    "--recordsize",
+    dest="recordsize",
+    type=int,
+    default=500,
+    help="limit number of record elements for each XML file and has to be "
+         "used together with '-x' [default: %(default)d]. For unlimited "
+         "records use 0")
+group1.add_argument(
+    "-x",
+    "--exportxml",
+    dest="exportxml",
+    type=str,
+    metavar="FILE",
+    nargs=1,
+    help="export mapped CERN LDAP records to XML FILE(s). Number of records "
+         "each FILE is based on RECORDSIZE")
+group1.add_argument(
+    "-m",
+    "--mapinspireids",
+    dest="inspireids",
+    type=lambda f: get_dict_from_json(parser, f),
+    metavar="FILE",
+    nargs=1,
+    help="mapping dictionary {'CERN-ID': 'Inspire-ID', ...} stored in FILE "
+         "used for mapping the CERN-ID to Inspire-ID instead of using "
+         "ATLAS GLANCE. Works together with '-x'")
+group1.add_argument(
+    "-j",
+    "--exportjson",
+    dest="exportjson",
+    type=str,
+    metavar="FILE",
+    nargs=1,
+    help="export CERN LDAP records to a JSON-formatted FILE, recommended "
+         "using it together with '-x'")
+group2.add_argument(
+    "-i",
+    "--insert",
+    dest="insert",
+    type=str,
+    nargs="+",
+    metavar="FILE",
+    help="insert XML FILE(s) to CDS using inveio.bibupload -i. '-i DIRECTORY' "
+         "will upload all XML files in the given DIRECTORY")
+group3.add_argument(
+    "-c",
+    "--count",
+    dest="count",
+    action="store_true",
+    help="count all primary CERN LDAP records")
+
+args = parser.parse_args()
+
+if args.exportxml or args.exportjson:
+    records = get_records()
+    print("{0} records fetched from CERN LDAP".format(len(records)))
+
+if args.exportxml:
+    try:
+        mapper = Mapper(mapping_inspire_ids=args.inspireids or None)
+        mapper.map_ldap_records(records)
+        mapper.write_marcxml(args.exportxml, args.recordsize)
+    except MapperError as e:
+        sys.stderr.write(e)
+        sys.exit(1)
+
+if args.exportjson:
+    try:
+        export_json(records, args.exportjson)
+    except UtilsError as e:
+        sys.stderr.write(e)
+        sys.exit(1)
+
+if args.insert:
+    if args.insert:
+        arg0 = args.insert[0]
+        # Upload XML files (located in directory arg0) to CDS
+        if isdir(arg0):
+            for f in glob(join(arg0, "*.xml")):
+                task_id = bibupload(f, "-i", "bibauthority-people-insert")
+        else:
+            for f in args.insert:
+                task_id = bibupload(f, "-i", "bibauthority-people-insert")
+        if task_id:
+            print("Task (identifier: {0}) is correctly enqueued".format(
+                task_id))
+        else:
+            print("Error: failed to enqueue task")
+
+if args.count:
+    records = get_records(ldap_attrlist=['employeeID'])
+    print("{0} records found on CERN LDAP".format(len(records)))
