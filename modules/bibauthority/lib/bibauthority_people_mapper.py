@@ -15,26 +15,40 @@
 # along with Invenio; if not, write to the Free Software Foundation, Inc.,
 # 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 
+"""BibAuthority CERN People colletion mapper."""
+
 from collections import OrderedDict
 from datetime import date
-from invenio.bibauthority_people_config import (
-    CFG_BIBAUTHORITY_AUTHOR_CERN, CFG_BIBAUTHORITY_AUTHOR_INSPIRE)
-from invenio.bibauthority_people_utils import (
-    get_inspire_id_from_atlas_glance, get_inspire_id_from_atlas_glance_local)
 from lxml import etree
 from os import makedirs
-from os.path import splitext, dirname, exists
+from os.path import(
+    dirname,
+    exists,
+    splitext
+)
+
+from invenio.bibauthority_people_config import(
+    CFG_BIBAUTHORITY_AUTHOR_CERN,
+    CFG_BIBAUTHORITY_AUTHOR_INSPIRE
+)
+from invenio.bibauthority_people_utils import(
+    get_inspire_id_from_atlas_glance,
+    get_inspire_id_from_atlas_glance_local
+)
 
 
 class MapperError(Exception):
     """Base class for exceptions in this module."""
+
     pass
 
 
 class Mapper:
     """Map LDAP records to MARC 21 authority records (MARCXML).
+
     MARC 21 authority reference: http://www.loc.gov/marc/authority/
     """
+
     def __init__(self, mapping_inspire_ids=None):
         """Initialize the mapper properties."""
         self.roots = []  # Contain all root elements
@@ -144,8 +158,9 @@ class Mapper:
         return elem_datafield
 
     def _create_subfield(self, parent, attr_code, inner_text):
-        """Create child element 'subfield' of parent including
-        attr_code and inner_text.
+        """Create child element 'subfield' of parent.
+
+        Includes attr_code and inner_text.
 
         :return: subfield element, child of parent
         """
@@ -167,7 +182,7 @@ class Mapper:
             record_size = -1
 
         # Append records to root element(s) depending on record_size
-        if len(self.records):
+        if self.records:
             current_root = self._create_root()
             self.roots.append(current_root)
             record_size_counter = 0
@@ -311,7 +326,7 @@ class Mapper:
         except EnvironmentError as e:
             raise MapperError("Error: failed writing file. ({0})".format(e))
 
-    def write_marcxml(self, file, record_size=500):
+    def write_marcxml(self, xml_file, record_size=500):
         """Prepare to write self.roots to a single file or multiple files.
 
         :param int record_size: record elements in a root node [default: 500],
@@ -319,8 +334,7 @@ class Mapper:
         :param filepath file: save to file,
             suffix ('_0', '_1', ...) will be added to file name
         """
-        filename, ext = splitext(file)
-        directory = dirname(file)
+        directory = dirname(xml_file)
         if directory is not "" and not exists(directory):
             makedirs(directory)
 
@@ -332,11 +346,12 @@ class Mapper:
                 self._write_xml(
                     etree.tostring(
                         self.roots[0], encoding='utf-8', pretty_print=True),
-                    file)
+                    xml_file)
             # Write multiple files
             else:
+                filename, ext = splitext(xml_file)
                 for i, root in enumerate(self.roots):
-                    f = "{0}_{1}.xml".format(filename, i)
+                    f = "{0}_{1}{2}".format(filename, i, ext)
                     self._write_xml(
                         etree.tostring(
                             root, encoding='utf-8', pretty_print=True),

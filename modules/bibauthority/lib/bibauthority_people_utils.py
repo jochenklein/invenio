@@ -15,6 +15,8 @@
 # along with Invenio; if not, write to the Free Software Foundation, Inc.,
 # 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 
+"""BibAuthority CERN People collection utils."""
+
 from json import dump, load
 from invenio.bibtask import task_low_level_submission
 from invenio.websubmit_author_sources.atlas_glance import (
@@ -25,6 +27,7 @@ from os.path import dirname, exists, isfile
 
 class UtilsError(Exception):
     """Base class for exceptions in this module."""
+
     pass
 
 
@@ -66,8 +69,9 @@ def get_inspire_id_from_atlas_glance(employee_id):
 
 
 def get_inspire_id_from_atlas_glance_local(employee_id, mapping):
-    """Get the Inspire-ID, given the CERN-ID (employeeID) and mapping
-    (employeeID: Inspire-ID).
+    """Get the Inspire-ID, given the CERN-ID and mapping.
+
+    CERN-ID being the `employeeID` and mapping the `employeeID: Inspire-ID`.
 
     :param string employee_id: CERN-ID (employeeID)
     :return: Inspire-ID or None
@@ -75,7 +79,7 @@ def get_inspire_id_from_atlas_glance_local(employee_id, mapping):
     return mapping.get(str(employee_id))
 
 
-def json_to_list(file):
+def json_to_list(json_file):
     """Transform JSON file to python list.
 
     :param filepath file: path to JSON file containing records
@@ -83,7 +87,7 @@ def json_to_list(file):
     """
     records = []
     try:
-        with open(file) as f:
+        with open(json_file) as f:
             try:
                 records = load(f)
             except ValueError as e:
@@ -96,8 +100,10 @@ def json_to_list(file):
 
 
 def diff_records(records_ldap, records_local):
-    """Compare records with same employeeID and classify between
-    changed ('change'), new ('add'), and removed ('remove') records.
+    """Compare records with same employeeID.
+
+    Classify them between changed ('change'), new ('add'),
+    and removed ('remove') records.
 
     :param list records_ldap: fetched CERN LDAP records
     :param list records_local: previous fetched CERN LDAP records, saved as a

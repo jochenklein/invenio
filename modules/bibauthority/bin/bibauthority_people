@@ -17,8 +17,10 @@
 # along with Invenio; if not, write to the Free Software Foundation, Inc.,
 # 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 
-"""Command line interface for the CDS people collection. Map all CERN LDAP
-records to MARC 21 authority records, write to XML files and upload to CDS.
+"""Command line interface for the CDS People collection.
+
+Map all CERN LDAP records to MARC 21 authority records,
+write to XML files and upload to CDS.
 
 See bibsched tasklet bst_bibauthority_updater for updating the collection.
 

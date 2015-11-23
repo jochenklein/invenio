@@ -15,8 +15,14 @@
 # along with Invenio; if not, write to the Free Software Foundation, Inc.,
 # 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 
+"""BibAuthority CERN People collection configuration file."""
+
 from os.path import join
-from invenio.config import CFG_CACHEDIR, CFG_TMPSHAREDDIR
+
+from invenio.config import(
+    CFG_CACHEDIR,
+    CFG_TMPSHAREDDIR
+)
 
 CFG_BIBAUTHORITY_LDAP_SEARCHFILTER = \
     r"(&(objectClass=*)(employeeType=Primary))"
@@ -35,9 +41,16 @@ CFG_BIBAUTHORITY_LDAP_ATTRLIST = [
     "division",
     "extensionAttribute12",
     "cernInstituteName",
-    "extensionAttribute11"]  # Attributes used by Mapper.mapper_dict
-CFG_BIBAUTHORITY_RECORDS_JSON_FILE = join(CFG_CACHEDIR, "records.json")
+    "extensionAttribute11"
+]  # Attributes used by Mapper.mapper_dict
+CFG_BIBAUTHORITY_RECORDS_JSON_FILE = join(
+    CFG_CACHEDIR,
+    "records.json"
+)
 CFG_BIBAUTHORITY_RECORDS_UPDATES_FILE = join(
-    CFG_TMPSHAREDDIR, "records_updates.xml")
+    CFG_TMPSHAREDDIR,
+    "records_updates.xml"
+)
+CFG_BIBAUTHORITY_AUTHOR_CDS = "AUTHOR|(CDS)"
 CFG_BIBAUTHORITY_AUTHOR_CERN = "AUTHOR|(SzGeCERN)"
 CFG_BIBAUTHORITY_AUTHOR_INSPIRE = "AUTHOR|(INSPIRE)"
