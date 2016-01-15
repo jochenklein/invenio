@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of Invenio.
-# Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011 CERN.
+# Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2015, 2016 CERN.
 #
 # Invenio is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License as
@@ -19,95 +19,104 @@
 """BibFormat element - Prints the control number of an Authority Record.
 """
 
+from invenio.bibauthority_config import (
+    CFG_BIBAUTHORITY_AUTHORITY_COLLECTION_NAME,
+    CFG_BIBAUTHORITY_RECORD_CONTROL_NUMBER_FIELD,
+    CFG_BIBAUTHORITY_RECORD_AUTHOR_CONTROL_NUMBER_FIELDS as control_number_fields)
+from invenio.bibauthority_engine import ( 
+    get_low_level_recIDs_from_control_no,
+    get_dependent_records_for_control_no)
 from invenio.config import CFG_SITE_URL, CFG_SITE_NAME
+from invenio.search_engine import get_fieldvalues, perform_request_search
 
-from invenio.bibauthority_config import \
-    CFG_BIBAUTHORITY_AUTHORITY_COLLECTION_NAME, \
-    CFG_BIBAUTHORITY_RECORD_CONTROL_NUMBER_FIELD, \
-    CFG_BIBAUTHORITY_RECORD_AUTHOR_CONTROL_NUMBER_FIELDS as control_number_fields, \
-    CFG_BIBAUTHORITY_AUTHORITY_COLLECTION_IDENTIFIER as authority_identifier
-from invenio.bibauthority_engine import \
-    get_low_level_recIDs_from_control_no, \
-    get_dependent_records_for_control_no
-
-from invenio.search_engine import get_fieldvalues
 
 CFG_BIBAUTHORITY_PUBLICATION_VIEW_LIMIT = 10
 __revision__ = "$Id$"
 
-def format_element(bfo):
+
+def get_record_ids_for_authority_ids(authority_ids, author_full_name):
+    """Return list of record ids for a given authority ids (control numbers).
+
+    If no record ids have been found for the given ids, do a search based
+    on the author's full name, stored in the field `100__a`.
+
+    :param list authority_id: authority ids (also known as control numbers)
+    :param str author_full_name: if no record ids have been found for the given
+        authority_id, search by author_full_name
+
+    :return: list of record ids, or empty list, if no record ids have been found
+    """
+    record_ids = []
+    for authority_id in authority_ids:
+        record_ids.extend(get_dependent_records_for_control_no(authority_id))
+        record_ids.extend(get_dependent_records_for_control_no(
+            authority_id.replace("AUTHOR|(SzGeCERN)", "CERN-")))
+        record_ids.extend(get_dependent_records_for_control_no(
+            authority_id.replace("AUTHOR|(SzGeCERN)", "CCID-")))
+        if not record_ids:
+            record_ids.extend(get_dependent_records_for_control_no(
+                authority_id.replace("AUTHOR|(INSPIRE)", "")))
+
+    if not record_ids:
+        # No record ids for the given authority ids have been found
+        # Search for record ids using the author's full name
+        record_ids.extend(perform_request_search(
+            p="author:\"{0}\"".format(author_full_name)))
+
+    # Remove possible duplicates
+    return list(set(record_ids))
+
+
+def format_element(bfo, print_title="yes"):
     """ Prints the control number of an author authority record in HTML.
     By default prints brief version.
-
     @param brief: whether the 'brief' rather than the 'detailed' format
     @type brief: 'yes' or 'no'
     """
-
     from invenio.messages import gettext_set_language
     _ = gettext_set_language(bfo.lang)    # load the right message language
 
-
     control_nos = [d['a'] for d in bfo.fields('035__') if d.get('a')]
-    authority_type = [d['a'] for d in bfo.fields('980__') if d.get('a') and d.get('a')!=authority_identifier]
-    if authority_type and type(authority_type) is list:
-        authority_type = authority_type[0]
+    control_nos.append("AUTHOR|(CDS){0}".format(bfo.control_field("001")))
 
-
-    previous_recIDs = []
-    parameters = []
-    count = 0
     publications_formatted = []
-    recids_added = set()
-    ## for every control number that this author has, find all the connected records for each one
-    for control_no in control_nos:
-        for control_number_field in control_number_fields.get(authority_type,[]):
-            parameters.append(control_number_field + ":" + control_no.replace(" ",""))
-        recIDs = [x for x in get_dependent_records_for_control_no(control_no) if x not in previous_recIDs]
-        length = len(recIDs) or None
-        from urllib import quote
-        # if we have dependent records, provide a link to them
-        if length:
-            prefix_pattern = "<a href='" + CFG_SITE_URL + "%s" + "'>"
-            postfix = "</a>"
-            url_str = ''
-            # print as many of the author's publications as the CFG_BIBAUTHORITY_PUBLICATION_VIEW_LIMIT allows
-            for i in range(length if length<CFG_BIBAUTHORITY_PUBLICATION_VIEW_LIMIT else CFG_BIBAUTHORITY_PUBLICATION_VIEW_LIMIT):
-                if recIDs[i] in recids_added:
-                    continue
-                recids_added.add(recIDs[i])
-                title = get_fieldvalues(recIDs[i],"245__a")
-                if not title:
-                    record_type = get_fieldvalues(recIDs[i],"980__a")
-                    if "AUTHORITY" in record_type:
-                        continue
-                count+=1
-                url_str = "/record/"+ str(recIDs[i])
-                prefix = prefix_pattern % url_str
-                publications_formatted.append(prefix + title[0] + postfix)
+    record_ids = get_record_ids_for_authority_ids(control_nos,
+                                                  bfo.field("100__a"))
+    # if we have dependent records, provide a link to them
+    if record_ids:
+        prefix_pattern = "<a href='" + CFG_SITE_URL + "%s" + "'>"
+        postfix = "</a>"
+        url_str = ''
+        # Print as many of the author's publications as the
+        # CFG_BIBAUTHORITY_PUBLICATION_VIEW_LIMIT allows
+        for i in range(
+                len(record_ids) if
+                len(record_ids) < CFG_BIBAUTHORITY_PUBLICATION_VIEW_LIMIT else
+                CFG_BIBAUTHORITY_PUBLICATION_VIEW_LIMIT):
+            title = get_fieldvalues(record_ids[i], "245__a")
+            if not title:
+                break
+            url_str = "/record/"+ str(record_ids[i])
+            prefix = prefix_pattern % url_str
+            publications_formatted.append(prefix + title[0] + postfix)
 
-    title = "<strong>" + _("Publication(s)") + "</strong>"
-    content = ""
+    result = ""
     if publications_formatted:
-        content = "<ul><li>" + "</li><li> ".join(publications_formatted) + "</li></ul>"
-    #else:
-    #    content = "<strong style='color:red'>Missing !</strong>"
+        result = ("<ol><li>" +
+                  "</li><li> ".join(publications_formatted) +
+                  "</li></ol>")
+    url_str = (
+        "/search" +
+        "?p=" + "author:\"{0}\"".format(bfo.field("100__a")) +
+        "&ln=" + bfo.lang)
+    if result:
+        prefix = prefix_pattern % url_str
+        result += prefix + "See more publications" + postfix
+        if print_title.lower() == "yes":
+            title = "<strong>" + _("Publication(s)") + "</strong>"
+            result = title + ": " + result
 
-    p_val = quote(" or ".join(parameters))
-        # include "&c=" parameter for bibliographic records
-        # and one "&c=" parameter for authority records
-    url_str = \
-    "/search" + \
-    "?p=" + p_val + \
-    "&c=" + quote(CFG_SITE_NAME) + \
-    "&c=" + CFG_BIBAUTHORITY_AUTHORITY_COLLECTION_NAME + \
-    "&sc=1" + \
-    "&ln=" + bfo.lang
-    prefix = prefix_pattern % url_str
-    if content:
-        content += prefix + "See all " + str(count) + " publications..." + postfix
-        return "<p>" + title + ": " + content + "</p>"
-    else:
-        return ""
+    return result
 
 
 def escape_values(bfo):
