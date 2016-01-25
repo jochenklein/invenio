@@ -21,10 +21,16 @@
 from invenio.messages import gettext_set_language
 
 
-def format_email(email, email_href="yes", icon="no"):
+def format_email(email, email_href="yes", icon="no", vcard_support="no"):
     """Return formatted email address."""
+    vcard_enabled = True if vcard_support.lower() == "yes" else False
+
     if email_href.lower() == "yes":
-        email = "<a href='mailto:{0}'>{0}</a>".format(email)
+        email = "<a {0}href='mailto:{1}'>{1}</a>".format(
+            "class='email' " if vcard_enabled else "", email)
+    else:
+        if vcard_enabled:
+            email = "<span class='email'>{0}</span>".format(email)
     if icon.lower() == "yes":
         icon_class = "fa fa-envelope"
         email = "<i class='{0}' style='font-size: 0.9em;'></i> {1}".format(
@@ -32,8 +38,14 @@ def format_email(email, email_href="yes", icon="no"):
     return email
 
 
-def format_phone_number(phone_number, icon="no"):
+def format_phone_number(phone_number, icon="no", vcard_support="no"):
     """Return formatted phone number."""
+    if vcard_support.lower() == "yes":
+        phone_number = (
+            "<span class='tel'>"
+            "<span class='type' style='display: none;'>work</span>"
+            "<span class='value'>{0}</span>"
+            "</span>".format(phone_number))
     if icon.lower() == "yes":
         icon_class = "fa fa-phone"
         phone_number = "<i class='{0}'></i> {1}".format(
@@ -41,8 +53,14 @@ def format_phone_number(phone_number, icon="no"):
     return phone_number
 
 
-def format_mobile_number(mobile_number, icon="no"):
+def format_mobile_number(mobile_number, icon="no", vcard_support="no"):
     """Return formatted mobile phone number."""
+    if vcard_support.lower() == "yes":
+        mobile_number = (
+            "<span class='tel'>"
+            "<span class='type' style='display: none;'>cell</span>"
+            "<span class='value'>{0}</span>"
+            "</span>".format(mobile_number))
     if icon.lower() == "yes":
         icon_class = "fa fa-mobile"
         mobile_number = "<i class='{0}'></i> {1}".format(
@@ -50,19 +68,27 @@ def format_mobile_number(mobile_number, icon="no"):
     return mobile_number
 
 
-def format_fax_number(fax_number, icon="no"):
+def format_fax_number(fax_number, icon="no", vcard_support="no"):
     """Return formatted fax number."""
+    if vcard_support.lower() == "yes":
+        fax_number = (
+            "<span class='tel'>"
+            "<span class='type' style='display: none;'>fax</span>"
+            "<span class='value'>{0}</span>"
+            "</span>".format(fax_number))
     if icon.lower() == "yes":
         icon_class = "fa fa-fax"
         fax_number = "<i class='{0}'></i> {1}".format(icon_class, fax_number)
     return fax_number
 
 
-def format_element(bfo, contact_type="all", email_href="yes", icon="no"):
+def format_element(bfo, contact_type="all", vcard_support="no",
+                   email_href="yes", icon="no"):
     """Return contact information for the record.
 
     :param string contact_type: return all contact information if 'all',
         other values: 'email', 'phone', 'mobile', or 'fax'
+    :param string vcard_support: enables vCard support if 'yes'
     :param string email_href: link email address using mailto if 'yes'
     :param string icon: display icon for the specified contact_type if 'yes'
     """
@@ -79,10 +105,12 @@ def format_element(bfo, contact_type="all", email_href="yes", icon="no"):
         tbl_row = "<tr><th>{0}</th><td>{1}</td></tr>"
         if email:
             result += tbl_row.format(
-                _("Email address"), format_email(email[0].lower(), email_href))
+                _("Email address"), format_email(
+                    email[0].lower(), email_href, vcard_support=vcard_support))
         if phone_number:
             result += tbl_row.format(
-                _("Phone number"), format_phone_number(phone_number[0]))
+                _("Phone number"), format_phone_number(
+                    phone_number[0], vcard_support=vcard_support))
         if mobile_number:
             result += tbl_row.format(
                 _("Mobile number"), format_mobile_number(mobile_number[0]))
